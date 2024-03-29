@@ -1,7 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MessageListenerService } from './payment-listener.service';
+import { EventProcessorService } from './event-processor.service';
 
 @Module({
   imports: [
@@ -23,6 +23,6 @@ import { MessageListenerService } from './payment-listener.service';
       },
     ]),
   ],
-  providers: [MessageListenerService, Logger],
+  providers: [EventProcessorService, Logger],
 })
-export class PaymentListenerModule {}
+export class EventProcessorModule {}

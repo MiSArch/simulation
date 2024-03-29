@@ -6,13 +6,15 @@ import { UpdateShipmentDto } from './dto/update-shipment.dto';
 @Injectable()
 export class ShipmentService {
   constructor(
+    // RabbitMQ Client
     @Inject('SHIPMENT_SERVICE')
     private readonly client: ClientProxy,
     private readonly logger: Logger,
   ) {}
 
   async register(data: CreateShipmentDto) {
-    this.logger.log('Registering shipment');
+    this.logger.log(`Registering shipment: ${JSON.stringify(data)}}`);
+    // queue event for later processing
     this.client.emit('register-shipment', data);
     return;
   }

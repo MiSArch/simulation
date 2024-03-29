@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PaymentListenerService } from './payment-listener.service';
+import { PaymentListenerService } from './event-processor.service';
 
 describe('PaymentListenerService', () => {
   let service: PaymentListenerService;
