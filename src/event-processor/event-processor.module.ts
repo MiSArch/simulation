@@ -3,6 +3,9 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventProcessorService } from './event-processor.service';
 
+/**
+ * The module for the event processor service.
+ */
 @Module({
   imports: [
     ClientsModule.registerAsync([

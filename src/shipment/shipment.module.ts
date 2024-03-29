@@ -4,8 +4,12 @@ import { ShipmentService } from './shipment.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+/**
+ * The module for the shipment service.
+ */
 @Module({
   imports: [
+    // register the shipment service as a client for rabbitmq
     ClientsModule.registerAsync([
       {
         name: 'SHIPMENT_SERVICE',

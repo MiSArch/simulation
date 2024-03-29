@@ -5,6 +5,9 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { EventProcessorModule } from './event-processor/event-processor.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
+/**
+ * The root module of the application.
+ */
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),

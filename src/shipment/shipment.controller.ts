@@ -3,6 +3,9 @@ import { ShipmentService } from './shipment.service';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
 
+/**
+ * The controller for the shipment service.
+ */
 @Controller('shipment')
 export class ShipmentController {
   constructor(private readonly shipmentService: ShipmentService) {}

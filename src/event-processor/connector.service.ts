@@ -7,6 +7,8 @@ import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 
 /**
  * Service for connecting to the payment and simulation endpoints.
+ * @property paymentEndpoint The URL for the payment service.
+ * @property shipmentEndpoint The URL for the shipment service.
  */
 @Injectable()
 export class ConnectorService {
@@ -22,6 +24,11 @@ export class ConnectorService {
     this.shipmentEndpoint = this.configService.get<string>('SHIPMENT_URL');
   }
 
+  /**
+   * Sends an update to the shipment service.
+   * @param data - The data to be sent for updating the shipment status.
+   * @returns A promise that resolves to an AxiosResponse object.
+   */
   async sendUpdateToShipment(data: UpdateShipmentStatusDto): Promise<AxiosResponse> {
     if(!this.shipmentEndpoint) {
         this.logger.error('Shipment URL not set');
@@ -30,6 +37,11 @@ export class ConnectorService {
     return this.send(`${this.shipmentEndpoint}/shipment/update`, data)
   }
 
+  /**
+   * Sends an update to the payment service.
+   * @param data - The data to be sent for updating the payment status.
+   * @returns A promise that resolves to an AxiosResponse object.
+   */
   async sendUpdateToPayment(data: UpdatePaymentStatusDto): Promise<AxiosResponse> {
     if(!this.paymentEndpoint) {
         this.logger.error('Payment URL not set');

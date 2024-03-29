@@ -4,6 +4,9 @@ import { PaymentService } from './payment.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+/**
+ * The module for the payment service.
+ */
 @Module({
   imports: [
     ClientsModule.registerAsync([
