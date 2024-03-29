@@ -50,10 +50,7 @@ export class EventProcessorService
       'PAYMENTS_PER_MINUTE',
       100,
     );
-    this.successRate =  this.configService.get<number>(
-      'SUCCESS_RATE',
-      0.95,
-    );
+    this.successRate = this.configService.get<number>('SUCCESS_RATE', 0.95);
 
     // setup queue variables
     this.queues.forEach((queue) => {
@@ -92,7 +89,7 @@ export class EventProcessorService
     } catch (error) {
       this.logger.error('Failed to connect to RabbitMQ', error);
       // retry in 5 seconds
-      setTimeout(this.connectToRabbitMQ, 5)
+      setTimeout(this.connectToRabbitMQ, 5);
     }
   }
 
@@ -115,7 +112,9 @@ export class EventProcessorService
           const delay = Math.floor(Math.random() * this.processingTime);
           this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
           // Wait for the set amount of time
-          setTimeout(() => { this.buildEventUpdate(queue, message) }, delay);
+          setTimeout(() => {
+            this.buildEventUpdate(queue, message);
+          }, delay);
 
           if (this.messageCounts[queue] >= this.maxMessages) {
             this.logger.debug(
@@ -139,21 +138,25 @@ export class EventProcessorService
     const successfull: boolean = Math.random() < this.successRate;
     switch (queueName) {
       case 'payments-queue':
-        const paymentStatus = successfull ? PaymentStatus.SUCCEEDED : PaymentStatus.FAILED
+        const paymentStatus = successfull
+          ? PaymentStatus.SUCCEEDED
+          : PaymentStatus.FAILED;
         const paymentDto: UpdatePaymentStatusDto = {
           paymentId: msg.paymentId,
-          paymentStatus
-        }
+          paymentStatus,
+        };
         this.connectorService.sendUpdateToPayment(paymentDto);
         break;
-      
+
       case 'shipments-queue':
-        const shipmentStatus = successfull ? ShipmentStatus.DELIVERED : ShipmentStatus.FAILED;
+        const shipmentStatus = successfull
+          ? ShipmentStatus.DELIVERED
+          : ShipmentStatus.FAILED;
         const shipmentDto: UpdateShipmentStatusDto = {
           shipmentId: msg.shipmentId,
-          shipmentStatus
-        }
-        this.connectorService.sendUpdateToShipment(shipmentDto)
+          shipmentStatus,
+        };
+        this.connectorService.sendUpdateToShipment(shipmentDto);
         break;
     }
   }
@@ -165,11 +168,38 @@ export class EventProcessorService
   resetMessageCounts() {
     this.logger.debug(`Resetting message counts.`);
     this.queues.forEach((queue) => {
+      // check if processing was stopped for any queue
+      if (!this.processingAllowed[queue]) {
+        // reconnect so RabbbitMQ resends all unacknowledged messages
+        return this.reconnectToRabbitMQ();
+      }
       this.messageCounts[queue] = 0;
       this.processingAllowed[queue] = true;
     });
-    // TODO reset channel if limited before, so old messages get resend
-    // Or figure out way, to retry from rabbitmq
+  }
+
+  /**
+   * Reconnects to RabbitMQ.
+   * Closes the existing channel and connection, then reconnects and initializes consumers for all queues.
+   */
+  private async reconnectToRabbitMQ() {
+    try {
+      this.logger.debug('Reconnecting to RabbitMQ...');
+      if (this.channel) {
+        await this.channel.close();
+        this.channel = null;
+      }
+      if (this.connection) {
+        await this.connection.close();
+        this.connection = null;
+      }
+
+      // Reconnect to RabbitMW
+      await this.connectToRabbitMQ();
+      this.queues.forEach((queue) => this.initializeConsumer(queue));
+    } catch (error) {
+      this.logger.error('Failed to reconnect to RabbitMQ', error);
+    }
   }
 
   /**
