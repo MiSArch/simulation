@@ -18,7 +18,8 @@ services:
       target: production
     environment:
       RABBITMQ_URL: amqp://simulation-rabbitmq:5672
-      PAYMENTS_PER_MINUTE: 10
+      PAYMENTS_PER_MINUTE: 10000000
+      SHIPMENTS_PER_MINUTE: 10000000
       PROCESSING_TIME_SECONDS: 5
     depends_on:
       - simulation-rabbitmq

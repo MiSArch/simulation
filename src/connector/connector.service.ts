@@ -2,8 +2,8 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosResponse } from 'axios';
-import { UpdateShipmentStatusDto } from './dto/update-shipment-status';
-import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
+import { UpdateShipmentStatusDto } from '../event-processor/dto/update-shipment-status';
+import { UpdatePaymentStatusDto } from '../event-processor/dto/update-payment-status.dto';
 
 /**
  * Service for connecting to the payment and simulation endpoints.

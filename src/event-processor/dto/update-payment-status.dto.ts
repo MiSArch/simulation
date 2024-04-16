@@ -10,5 +10,5 @@ export class UpdatePaymentStatusDto {
   @IsUUID()
   readonly paymentId: string;
   @IsString()
-  readonly paymentStatus: PaymentStatus
+  readonly status: PaymentStatus;
 }

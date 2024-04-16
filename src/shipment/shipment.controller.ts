@@ -19,4 +19,9 @@ export class ShipmentController {
   async update(@Body() updateShipmentDto: UpdateShipmentDto) {
     return this.shipmentService.update(updateShipmentDto);
   }
+
+  @Post('/findAll')
+  async findAll() {
+    return this.shipmentService.findAll();
+  }
 }

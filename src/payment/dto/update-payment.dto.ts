@@ -1,4 +1,5 @@
 import { IsString, IsUUID } from 'class-validator';
+import { PaymentStatus } from 'src/shared/enums/payment-status.enum';
 
 /**
  * The DTO for manual payment updates.
@@ -9,5 +10,5 @@ export class UpdatePaymentDto {
   @IsUUID()
   readonly paymentId: string;
   @IsString()
-  readonly status: string;
+  readonly status: PaymentStatus;
 }
