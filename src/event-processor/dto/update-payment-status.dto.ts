@@ -1,4 +1,4 @@
-import { IsInt, IsString, IsUUID } from 'class-validator';
+import { IsString, IsUUID } from 'class-validator';
 import { PaymentStatus } from 'src/shared/enums/payment-status.enum';
 
 /**
@@ -12,4 +12,3 @@ export class UpdatePaymentStatusDto {
   @IsString()
   readonly paymentStatus: PaymentStatus
 }
-

@@ -18,7 +18,7 @@ export class ConnectorService {
   constructor(
     private readonly logger: Logger,
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,  
+    private readonly configService: ConfigService,
   ) {
     this.paymentEndpoint = this.configService.get<string>('PAYMENT_URL');
     this.shipmentEndpoint = this.configService.get<string>('SHIPMENT_URL');
@@ -29,12 +29,14 @@ export class ConnectorService {
    * @param data - The data to be sent for updating the shipment status.
    * @returns A promise that resolves to an AxiosResponse object.
    */
-  async sendUpdateToShipment(data: UpdateShipmentStatusDto): Promise<AxiosResponse> {
-    if(!this.shipmentEndpoint) {
-        this.logger.error('Shipment URL not set');
-        return null;
+  async sendUpdateToShipment(
+    data: UpdateShipmentStatusDto,
+  ): Promise<AxiosResponse> {
+    if (!this.shipmentEndpoint) {
+      this.logger.error('Shipment URL not set');
+      return null;
     }
-    return this.send(`${this.shipmentEndpoint}/shipment/update`, data)
+    return this.send(`${this.shipmentEndpoint}/shipment/update`, data);
   }
 
   /**
@@ -42,12 +44,14 @@ export class ConnectorService {
    * @param data - The data to be sent for updating the payment status.
    * @returns A promise that resolves to an AxiosResponse object.
    */
-  async sendUpdateToPayment(data: UpdatePaymentStatusDto): Promise<AxiosResponse> {
-    if(!this.paymentEndpoint) {
-        this.logger.error('Payment URL not set');
-        return null;
+  async sendUpdateToPayment(
+    data: UpdatePaymentStatusDto,
+  ): Promise<AxiosResponse> {
+    if (!this.paymentEndpoint) {
+      this.logger.error('Payment URL not set');
+      return null;
     }
-    return this.send(`${this.paymentEndpoint}/payment/update`, data)
+    return this.send(`${this.paymentEndpoint}/payment/update`, data);
   }
 
   /**
@@ -59,9 +63,7 @@ export class ConnectorService {
    */
   async send(endpoint: string, data: any): Promise<AxiosResponse> {
     try {
-      const response = await this.httpService
-        .post(endpoint, data)
-        .toPromise();
+      const response = await this.httpService.post(endpoint, data).toPromise();
       if (response.status !== 200) {
         this.logger.error(
           `Request to ${endpoint} failed with status ${response.status}`,

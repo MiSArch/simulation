@@ -60,14 +60,21 @@ export class EventProcessorService
   }
 
   async onModuleInit() {
-    await this.connectToRabbitMQ();
+    let rabbitMQConnected: boolean = await this.connectToRabbitMQ();
+
+    while (!rabbitMQConnected) {
+      this.logger.debug('Retrying in 5 seconds.');
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      rabbitMQConnected = await this.connectToRabbitMQ();
+    }
     this.queues.forEach((queue) => this.initializeConsumer(queue));
   }
 
   /**
    * connects to the RabbitMQ Queue
+   * @returns boolean that indicates if the connection was successful
    */
-  private async connectToRabbitMQ() {
+  private async connectToRabbitMQ(): Promise<boolean> {
     const rabbitmqUrl = this.configService.get<string>(
       'RABBITMQ_URL',
       'amqp://localhost',
@@ -86,10 +93,10 @@ export class EventProcessorService
       });
 
       this.logger.log('Connected to RabbitMQ.');
+      return true;
     } catch (error) {
       this.logger.error('Failed to connect to RabbitMQ', error);
-      // retry in 5 seconds
-      setTimeout(this.connectToRabbitMQ, 5);
+      return false;
     }
   }
 
@@ -170,8 +177,8 @@ export class EventProcessorService
     this.queues.forEach((queue) => {
       // check if processing was stopped for any queue
       if (!this.processingAllowed[queue]) {
-        // reconnect so RabbbitMQ resends all unacknowledged messages
-        return this.reconnectToRabbitMQ();
+        // close channels so Queue resends all unacknowledged messages
+        this.reconnectToRabbitMQ();
       }
       this.messageCounts[queue] = 0;
       this.processingAllowed[queue] = true;

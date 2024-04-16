@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger, NotImplementedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  NotImplementedException,
+} from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
