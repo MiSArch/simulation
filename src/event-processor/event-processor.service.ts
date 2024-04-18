@@ -84,10 +84,7 @@ export class EventProcessorService
    * @returns boolean that indicates if the connection was successful
    */
   private async connectToRabbitMQ(): Promise<boolean> {
-    const rabbitmqUrl = this.configService.get<string>(
-      'RABBITMQ_URL',
-      'amqp://localhost',
-    );
+    const rabbitmqUrl = this.configService.get<string>('RABBITMQ_URL');
     try {
       // Establish a connection to the RabbitMQ server
       this.connection = await amqp.connect(rabbitmqUrl);
@@ -212,20 +209,25 @@ export class EventProcessorService
   @Cron('0 * * * * *')
   resetMessageCounts() {
     this.logger.debug(`Resetting message counts.`);
+    let reconnect: boolean = false;
     this.queues.forEach((queue) => {
       // check if processing was stopped for any queue
       if (!this.processingAllowed[queue] && this.maxPerMinute[queue] > 0) {
-        // close channels so Queue resends all unacknowledged messages
-        this.reconnectToRabbitMQ();
+        reconnect = true;
       }
       this.messageCounts[queue] = 0;
       this.processingAllowed[queue] = true;
     });
+
+    if (reconnect) {
+      this.reconnectToRabbitMQ();
+    }
   }
 
   /**
    * Reconnects to RabbitMQ.
    * Closes the existing channel and connection, then reconnects and initializes consumers for all queues.
+   * This leads to RabbitMQ resending all unacknowledged messages.
    */
   private async reconnectToRabbitMQ() {
     try {

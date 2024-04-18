@@ -4,7 +4,7 @@ services:
       file: docker-compose-base.yaml
       service: simulation
     ports:
-      - 7000:7000
+      - 8080:8080
     build:
       context: ./
       target: development
