@@ -1,0 +1,26 @@
+# Docker Compose Configuration
+# visit https://docs.docker.com/compose/
+
+version: '3.8'
+services:
+  # app service for your backend
+  simulation:
+    restart: unless-stopped
+    healthcheck:
+      test: >
+        curl -f -X GET http://localhost:7000/health || exit 1
+      interval: 1s
+      timeout: 10s
+      retries: 20
+      start_period: 3s
+    build:
+      context: ./
+      target: production
+    environment:
+      RABBITMQ_URL: amqp://simulation-rabbitmq:5672
+      PAYMENTS_PER_MINUTE: 10
+      PROCESSING_TIME_SECONDS: 5
+    depends_on:
+      - simulation-rabbitmq
+  simulation-rabbitmq:
+    image: "rabbitmq:3-management"
