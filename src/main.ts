@@ -10,7 +10,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
 
   await app.startAllMicroservices();
-  await app.listen(7000);
+  await app.listen(8080);
   console.log(`Application is running on: ${await app.getUrl()}`);
 
   // logging
