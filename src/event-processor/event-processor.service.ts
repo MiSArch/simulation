@@ -143,7 +143,7 @@ export class EventProcessorService
     const delay = Math.floor(Math.random() * this.processingTime);
     this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
     setTimeout(() => {
-      this.buildEventUpdate(queue, message);
+      this.buildEventUpdate(queue, data);
     }, delay);
   }
 
@@ -174,7 +174,7 @@ export class EventProcessorService
    * @param queueName The string identifier of the queue
    * @param msg The received message
    */
-  private buildEventUpdate(queueName: string, msg: any) {
+  private buildEventUpdate(queueName: string, data: { paymentId?: string, shipmentId?: string }) {
     // flip successfull event with given sucess rate
     const successfull: boolean = Math.random() < this.successRate;
     switch (queueName) {
@@ -183,7 +183,7 @@ export class EventProcessorService
           ? PaymentStatus.SUCCEEDED
           : PaymentStatus.FAILED;
         const paymentDto: UpdatePaymentStatusDto = {
-          paymentId: msg.paymentId,
+          paymentId: data.paymentId,
           status,
         };
         this.connectorService.sendUpdateToPayment(paymentDto);
@@ -194,7 +194,7 @@ export class EventProcessorService
           ? ShipmentStatus.DELIVERED
           : ShipmentStatus.FAILED;
         const shipmentDto: UpdateShipmentStatusDto = {
-          shipmentId: msg.shipmentId,
+          shipmentId: data.shipmentId,
           status,
         };
         this.connectorService.sendUpdateToShipment(shipmentDto);

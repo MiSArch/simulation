@@ -1,4 +1,4 @@
-import { IsString, IsUUID } from 'class-validator';
+import { IsString, IsUUID, IsNumber } from 'class-validator';
 
 /**
  * The DTO for a payment creation event.
@@ -8,6 +8,8 @@ import { IsString, IsUUID } from 'class-validator';
 export class CreatePaymentDto {
   @IsUUID()
   readonly paymentId: string;
+  @IsNumber()
+  readonly amount: number;
   @IsString()
   readonly paymentType: string;
 }

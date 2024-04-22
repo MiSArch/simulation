@@ -51,7 +51,7 @@ export class ConnectorService {
       this.logger.error('Payment URL not set');
       return null;
     }
-    return this.send(`${this.paymentEndpoint}/payment/update`, data);
+    return this.send(`${this.paymentEndpoint}/payment/update-payment-status`, data);
   }
 
   /**
@@ -64,14 +64,14 @@ export class ConnectorService {
   async send(endpoint: string, data: any): Promise<AxiosResponse> {
     try {
       const response = await this.httpService.post(endpoint, data).toPromise();
-      if (response.status !== 200) {
+      if (response.status < 200 || response.status > 299) {
         this.logger.error(
           `Request to ${endpoint} failed with status ${response.status}`,
         );
       }
       return response;
     } catch (error) {
-      this.logger.error(`Error sending request to ${endpoint}:`, error);
+      this.logger.error(`Error sending request to ${endpoint}: ${JSON.stringify(error)}`);
     }
   }
 }
