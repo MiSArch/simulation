@@ -3,6 +3,8 @@ import { ShipmentController } from './shipment.controller';
 import { ShipmentService } from './shipment.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventProcessorModule } from 'src/event-processor/event-processor.module';
+import { ConnectorModule } from 'src/connector/connector.module';
 
 /**
  * The module for the shipment service.
@@ -27,6 +29,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         inject: [ConfigService],
       },
     ]),
+    ConnectorModule,
   ],
   controllers: [ShipmentController],
   providers: [ShipmentService, Logger],

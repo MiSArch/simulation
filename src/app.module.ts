@@ -5,6 +5,7 @@ import { ShipmentModule } from './shipment/shipment.module';
 import { EventProcessorModule } from './event-processor/event-processor.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './health/health.module';
+import { ConnectorModule } from './connector/connector.module';
 
 /**
  * The root module of the application.
@@ -17,6 +18,7 @@ import { HealthModule } from './health/health.module';
     EventProcessorModule,
     HealthModule,
     ScheduleModule.forRoot(),
+    ConnectorModule,
   ],
 })
 export class AppModule {}

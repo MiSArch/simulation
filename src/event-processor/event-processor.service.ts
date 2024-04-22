@@ -7,11 +7,14 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import * as amqp from 'amqplib';
-import { ConnectorService } from './connector.service';
+import { ConnectorService } from '../connector/connector.service';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { PaymentStatus } from 'src/shared/enums/payment-status.enum';
 import { ShipmentStatus } from 'src/shared/enums/shipment-status.enum';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status';
+import { ShipmentService } from 'src/shipment/shipment.service';
+import { PaymentService } from 'src/payment/payment.service';
+// import { ConnectionService } from './connection.service'; // Adjust import path as needed
 
 /**
  * The service to process events from the respective queues.
@@ -30,7 +33,8 @@ export class EventProcessorService
   private connection: amqp.Connection;
   private channel: amqp.Channel;
   private queues = ['payments-queue', 'shipments-queue'];
-  private maxMessages: number;
+  private maxPerMinute: { [key: string]: number } = {};
+  private maxShipmentsPerMinute: number;
   private successRate: number;
   private messageCounts: { [key: string]: number } = {};
   private processingAllowed: { [key: string]: boolean } = {};
@@ -39,13 +43,19 @@ export class EventProcessorService
     private readonly logger: Logger,
     private configService: ConfigService,
     private connectorService: ConnectorService,
+    private shipmentService: ShipmentService,
+    private paymentService: PaymentService,
   ) {
     // read configuration from environment variables
     this.processingTime = this.configService.get<number>(
       'PROCESSING_TIME_SECONDS',
       5000,
     );
-    this.maxMessages = this.configService.get<number>(
+    this.maxPerMinute[this.queues[0]] = this.configService.get<number>(
+      'PAYMENTS_PER_MINUTE',
+      100,
+    );
+    this.maxPerMinute[this.queues[1]] = this.configService.get<number>(
       'PAYMENTS_PER_MINUTE',
       100,
     );
@@ -101,34 +111,62 @@ export class EventProcessorService
    * @param queue the queue identifier
    */
   private initializeConsumer(queue: string) {
-    this.channel.consume(
-      queue,
-      (msg) => {
-        if (msg && this.processingAllowed[queue]) {
-          const message = msg.content.toString();
-          this.logger.debug(
-            `[${queue}] Processing message: ${message} [${this.messageCounts[queue] + 1}/${this.maxMessages}]`,
-          );
-          this.channel.ack(msg);
-          this.messageCounts[queue]++;
-          // randomise timeout to simulate processing
-          const delay = Math.floor(Math.random() * this.processingTime);
-          this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
-          // Wait for the set amount of time
-          setTimeout(() => {
-            this.buildEventUpdate(queue, message);
-          }, delay);
+    this.channel.consume(queue, (msg) => this.consumeMessage(queue, msg), {
+      noAck: false,
+    });
+  }
 
-          if (this.messageCounts[queue] >= this.maxMessages) {
-            this.logger.debug(
-              `[${queue}] Maximum message count reached. Pausing processing until reset.`,
-            );
-            this.processingAllowed[queue] = false;
-          }
-        }
-      },
-      { noAck: false },
+  /**
+   * Consumes a message from the queue
+   * @param queue the queue identifier
+   * @param messageObject the message object to consume
+   */
+  private consumeMessage(queue: string, message: any) {
+    if (this.messageCounts[queue] >= this.maxPerMinute[queue]) {
+      this.logger.debug(`[${queue}] Maximum message count reached. Pausing processing until reset.`);
+      return (this.processingAllowed[queue] = false);
+    }
+
+    const { data } = this.parseMessage(message);
+    this.logger.debug(
+      `[${queue}] Processing message: ${JSON.stringify(data)} [${this.messageCounts[queue] + 1}/${this.maxPerMinute[queue]}]`,
     );
+    this.channel.ack(message);
+
+    // check if message was already manually updated
+    if (this.isBlocked(queue, data)) {
+      return;
+    }
+
+    this.messageCounts[queue]++;
+    // randomise timeout to simulate processing
+    const delay = Math.floor(Math.random() * this.processingTime);
+    this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
+    setTimeout(() => {
+      this.buildEventUpdate(queue, data);
+    }, delay);
+  }
+
+  private parseMessage(msg: any): { messagePattern: string; data: object } {
+    const message = msg.content.toString();
+    return JSON.parse(message);
+  }
+
+  /**
+   * Checks if a message was already manually updated
+   * @param queue the queue identifier
+   * @param message the message to check
+   * @returns boolean indicating if the message was manually updated
+   */
+  private isBlocked(queue: string, data: any): boolean {
+    switch (queue) {
+      case 'payments-queue': {
+        return this.paymentService.isBlocked(data.paymentId);
+      }
+      case 'shipments-queue': {
+        return this.shipmentService.isBlocked(data.shipmentId);
+      }
+    }
   }
 
   /**
@@ -136,31 +174,32 @@ export class EventProcessorService
    * @param queueName The string identifier of the queue
    * @param msg The received message
    */
-  private buildEventUpdate(queueName: string, msg: any) {
+  private buildEventUpdate(queueName: string, data: { paymentId?: string, shipmentId?: string }) {
     // flip successfull event with given sucess rate
     const successfull: boolean = Math.random() < this.successRate;
     switch (queueName) {
-      case 'payments-queue':
-        const paymentStatus = successfull
+      case 'payments-queue': {
+        const status = successfull
           ? PaymentStatus.SUCCEEDED
           : PaymentStatus.FAILED;
         const paymentDto: UpdatePaymentStatusDto = {
-          paymentId: msg.paymentId,
-          paymentStatus,
+          paymentId: data.paymentId,
+          status,
         };
         this.connectorService.sendUpdateToPayment(paymentDto);
         break;
-
-      case 'shipments-queue':
-        const shipmentStatus = successfull
+      }
+      case 'shipments-queue': {
+        const status = successfull
           ? ShipmentStatus.DELIVERED
           : ShipmentStatus.FAILED;
         const shipmentDto: UpdateShipmentStatusDto = {
-          shipmentId: msg.shipmentId,
-          shipmentStatus,
+          shipmentId: data.shipmentId,
+          status,
         };
         this.connectorService.sendUpdateToShipment(shipmentDto);
         break;
+      }
     }
   }
 
@@ -173,7 +212,7 @@ export class EventProcessorService
     let reconnect: boolean = false;
     this.queues.forEach((queue) => {
       // check if processing was stopped for any queue
-      if (!this.processingAllowed[queue]) {
+      if (!this.processingAllowed[queue] && this.maxPerMinute[queue] > 0) {
         reconnect = true;
       }
       this.messageCounts[queue] = 0;

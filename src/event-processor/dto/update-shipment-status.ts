@@ -10,5 +10,5 @@ export class UpdateShipmentStatusDto {
   @IsUUID()
   readonly shipmentId: string;
   @IsString()
-  readonly shipmentStatus: ShipmentStatus;
+  readonly status: ShipmentStatus;
 }

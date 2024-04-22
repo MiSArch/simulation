@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: >
-        curl -f -X GET http://localhost:7000/health || exit 1
+        curl -f -X GET http://localhost:8080/health || exit 1
       interval: 1s
       timeout: 10s
       retries: 20
@@ -18,8 +18,11 @@ services:
       target: production
     environment:
       RABBITMQ_URL: amqp://simulation-rabbitmq:5672
-      PAYMENTS_PER_MINUTE: 10
+      PAYMENTS_PER_MINUTE: 10000000
+      SHIPMENTS_PER_MINUTE: 10000000
       PROCESSING_TIME_SECONDS: 5
+      PAYMENT_URL: http://payment:8080
+      SHIPMENT_URL: http://shipment:8080
     depends_on:
       - simulation-rabbitmq
   simulation-rabbitmq:

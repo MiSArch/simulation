@@ -3,6 +3,7 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConnectorModule } from 'src/connector/connector.module';
 
 /**
  * The module for the payment service.
@@ -26,6 +27,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         inject: [ConfigService],
       },
     ]),
+    ConnectorModule,
   ],
   controllers: [PaymentController],
   providers: [PaymentService, Logger],

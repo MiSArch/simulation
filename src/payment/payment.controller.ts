@@ -19,4 +19,9 @@ export class PaymentController {
   async update(@Body() updatePaymentDto: UpdatePaymentDto) {
     return this.paymentService.update(updatePaymentDto);
   }
+
+  @Post('/findAll')
+  async findAll() {
+    return this.paymentService.findAll();
+  }
 }
