@@ -20,8 +20,20 @@ export class ConnectorService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.paymentEndpoint = this.configService.get<string>('PAYMENT_URL');
-    this.shipmentEndpoint = this.configService.get<string>('SHIPMENT_URL');
+    this.paymentEndpoint = this.configService.get<string>(
+      'PAYMENT_URL',
+      'NOT_SET',
+    );
+    this.shipmentEndpoint = this.configService.get<string>(
+      'SHIPMENT_URL',
+      'NOT_SET',
+    );
+    if (this.paymentEndpoint === 'NOT_SET') {
+      this.logger.error('Payment URL not set');
+    }
+    if (this.shipmentEndpoint === 'NOT_SET') {
+      this.logger.error('Shipment URL not set');
+    }
   }
 
   /**
@@ -32,10 +44,6 @@ export class ConnectorService {
   async sendUpdateToShipment(
     data: UpdateShipmentStatusDto,
   ): Promise<AxiosResponse> {
-    if (!this.shipmentEndpoint) {
-      this.logger.error('Shipment URL not set');
-      return null;
-    }
     return this.send(`${this.shipmentEndpoint}/shipment/update`, data);
   }
 
@@ -47,10 +55,6 @@ export class ConnectorService {
   async sendUpdateToPayment(
     data: UpdatePaymentStatusDto,
   ): Promise<AxiosResponse> {
-    if (!this.paymentEndpoint) {
-      this.logger.error('Payment URL not set');
-      return null;
-    }
     return this.send(`${this.paymentEndpoint}/payment/update-payment-status`, data);
   }
 
@@ -64,6 +68,9 @@ export class ConnectorService {
   async send(endpoint: string, data: any): Promise<AxiosResponse> {
     try {
       const response = await this.httpService.post(endpoint, data).toPromise();
+      if (!response) {
+        throw new Error(`Request to ${endpoint} failed`);
+      }
       if (response.status < 200 || response.status > 299) {
         this.logger.error(
           `Request to ${endpoint} failed with status ${response.status}`,
@@ -71,7 +78,10 @@ export class ConnectorService {
       }
       return response;
     } catch (error) {
-      this.logger.error(`Error sending request to ${endpoint}: ${JSON.stringify(error)}`);
+      this.logger.error(
+        `Error sending request to ${endpoint}: ${JSON.stringify(error)}`,
+      );
+      throw error;
     }
   }
 }

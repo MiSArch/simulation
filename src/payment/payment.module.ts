@@ -17,7 +17,7 @@ import { ConnectorModule } from 'src/connector/connector.module';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.RMQ,
           options: {
-            urls: [configService.get<string>('RABBITMQ_URL')],
+            urls: [configService.get<string>('RABBITMQ_URL', 'NOT_SET')],
             queue: 'payments-queue',
             queueOptions: {
               durable: true,

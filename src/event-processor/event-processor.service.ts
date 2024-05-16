@@ -23,7 +23,8 @@ import { PaymentService } from 'src/payment/payment.service';
  * @property queues An array containing all queue identifiers, to connect to
  * @property maxMessages The rate limit for each queue per minute
  * @property messageCounts The current message count
- * @property booolean flag
+ * @property processingAllowed A flag to indicate if processing is allowed for the queue
+ * @property rabbitmqUrl The RabbitMQ URL
  */
 @Injectable()
 export class EventProcessorService
@@ -34,10 +35,10 @@ export class EventProcessorService
   private channel: amqp.Channel;
   private queues = ['payments-queue', 'shipments-queue'];
   private maxPerMinute: { [key: string]: number } = {};
-  private maxShipmentsPerMinute: number;
   private successRate: number;
   private messageCounts: { [key: string]: number } = {};
   private processingAllowed: { [key: string]: boolean } = {};
+  private rabbitmqUrl: string;
 
   constructor(
     private readonly logger: Logger,
@@ -60,6 +61,13 @@ export class EventProcessorService
       100,
     );
     this.successRate = this.configService.get<number>('SUCCESS_RATE', 0.95);
+    this.rabbitmqUrl = this.configService.get<string>(
+      'RABBITMQ_URL',
+      'NOT_SET',
+    );
+    if (this.rabbitmqUrl === 'NOT_SET') {
+      throw new Error('RABBITMQ_URL is not set');
+    }
 
     // setup queue variables
     this.queues.forEach((queue) => {
@@ -84,10 +92,9 @@ export class EventProcessorService
    * @returns boolean that indicates if the connection was successful
    */
   private async connectToRabbitMQ(): Promise<boolean> {
-    const rabbitmqUrl = this.configService.get<string>('RABBITMQ_URL');
     try {
       // Establish a connection to the RabbitMQ server
-      this.connection = await amqp.connect(rabbitmqUrl);
+      this.connection = await amqp.connect(this.rabbitmqUrl);
       // Create a channel for querying
       this.channel = await this.connection.createChannel();
 
@@ -111,9 +118,13 @@ export class EventProcessorService
    * @param queue the queue identifier
    */
   private initializeConsumer(queue: string) {
-    this.channel.consume(queue, (msg) => this.consumeMessage(queue, msg), {
-      noAck: false,
-    });
+    this.channel.consume(
+      queue,
+      (msg: amqp.ConsumeMessage | null) => this.consumeMessage(queue, msg),
+      {
+        noAck: false,
+      },
+    );
   }
 
   /**
@@ -121,10 +132,13 @@ export class EventProcessorService
    * @param queue the queue identifier
    * @param messageObject the message object to consume
    */
-  private consumeMessage(queue: string, message: any) {
+  private consumeMessage(queue: string, message: amqp.Message | null) {
     if (this.messageCounts[queue] >= this.maxPerMinute[queue]) {
       this.logger.debug(`[${queue}] Maximum message count reached. Pausing processing until reset.`);
       return (this.processingAllowed[queue] = false);
+    }
+    if (!message) {
+      return;
     }
 
     const { data } = this.parseMessage(message);
@@ -147,7 +161,10 @@ export class EventProcessorService
     }, delay);
   }
 
-  private parseMessage(msg: any): { messagePattern: string; data: object } {
+  private parseMessage(msg: amqp.Message): {
+    messagePattern: string;
+    data: object;
+  } {
     const message = msg.content.toString();
     return JSON.parse(message);
   }
@@ -157,6 +174,7 @@ export class EventProcessorService
    * @param queue the queue identifier
    * @param message the message to check
    * @returns boolean indicating if the message was manually updated
+   * @throws Error if the queue is unknown
    */
   private isBlocked(queue: string, data: any): boolean {
     switch (queue) {
@@ -166,6 +184,8 @@ export class EventProcessorService
       case 'shipments-queue': {
         return this.shipmentService.isBlocked(data.shipmentId);
       }
+      default:
+        throw new Error('Unknown queue');
     }
   }
 
@@ -234,11 +254,9 @@ export class EventProcessorService
       this.logger.debug('Reconnecting to RabbitMQ...');
       if (this.channel) {
         await this.channel.close();
-        this.channel = null;
       }
       if (this.connection) {
         await this.connection.close();
-        this.connection = null;
       }
 
       // Reconnect to RabbitMW
