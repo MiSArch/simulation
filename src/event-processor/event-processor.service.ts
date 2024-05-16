@@ -137,33 +137,28 @@ export class EventProcessorService
       this.logger.debug(`[${queue}] Maximum message count reached. Pausing processing until reset.`);
       return (this.processingAllowed[queue] = false);
     }
-    if (!message) {
-      return;
-    }
-
+    if (!message) { return }
     const { data } = this.parseMessage(message);
     this.logger.debug(
       `[${queue}] Processing message: ${JSON.stringify(data)} [${this.messageCounts[queue] + 1}/${this.maxPerMinute[queue]}]`,
     );
     this.channel.ack(message);
-
     // check if message was already manually updated
-    if (this.isBlocked(queue, data)) {
-      return;
-    }
-
+    if (this.isBlocked(queue, data)) { return }
     this.messageCounts[queue]++;
     // randomise timeout to simulate processing
     const delay = Math.floor(Math.random() * this.processingTime);
     this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
     setTimeout(() => {
-      this.buildEventUpdate(queue, data);
+      const id = data.paymentId || data.shipmentId;
+      if (!id) { throw new Error('No ID found in message') }
+      this.buildEventUpdate(queue, id);
     }, delay);
   }
 
   private parseMessage(msg: amqp.Message): {
     messagePattern: string;
-    data: object;
+    data: { paymentId?: string; shipmentId?: string };
   } {
     const message = msg.content.toString();
     return JSON.parse(message);
@@ -194,7 +189,7 @@ export class EventProcessorService
    * @param queueName The string identifier of the queue
    * @param msg The received message
    */
-  private buildEventUpdate(queueName: string, data: { paymentId?: string, shipmentId?: string }) {
+  private buildEventUpdate(queueName: string, id: string) {
     // flip successfull event with given sucess rate
     const successfull: boolean = Math.random() < this.successRate;
     switch (queueName) {
@@ -203,7 +198,7 @@ export class EventProcessorService
           ? PaymentStatus.SUCCEEDED
           : PaymentStatus.FAILED;
         const paymentDto: UpdatePaymentStatusDto = {
-          paymentId: data.paymentId,
+          paymentId: id,
           status,
         };
         this.connectorService.sendUpdateToPayment(paymentDto);
@@ -214,7 +209,7 @@ export class EventProcessorService
           ? ShipmentStatus.DELIVERED
           : ShipmentStatus.FAILED;
         const shipmentDto: UpdateShipmentStatusDto = {
-          shipmentId: data.shipmentId,
+          shipmentId: id,
           status,
         };
         this.connectorService.sendUpdateToShipment(shipmentDto);
