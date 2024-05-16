@@ -4,7 +4,6 @@ import {
   OnModuleInit,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import * as amqp from 'amqplib';
 import { ConnectorService } from '../connector/connector.service';
@@ -14,11 +13,11 @@ import { ShipmentStatus } from 'src/shared/enums/shipment-status.enum';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status';
 import { ShipmentService } from 'src/shipment/shipment.service';
 import { PaymentService } from 'src/payment/payment.service';
-// import { ConnectionService } from './connection.service'; // Adjust import path as needed
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 /**
  * The service to process events from the respective queues.
- * @property processingTime The upper limit of simulated processing time
+ * @property processingTime The simulated processing time for each queue
  * @property connection The current RabbitMQ connection
  * @property queues An array containing all queue identifiers, to connect to
  * @property maxMessages The rate limit for each queue per minute
@@ -30,53 +29,26 @@ import { PaymentService } from 'src/payment/payment.service';
 export class EventProcessorService
   implements OnModuleInit, OnApplicationShutdown
 {
-  private readonly processingTime: number;
   private connection: amqp.Connection;
   private channel: amqp.Channel;
   private queues = ['payments-queue', 'shipments-queue'];
+  private readonly processingTime: { [key: string]: number } = {};
   private maxPerMinute: { [key: string]: number } = {};
-  private successRate: number;
+  private successRate: { [key: string]: number } = {};
   private messageCounts: { [key: string]: number } = {};
   private processingAllowed: { [key: string]: boolean } = {};
   private rabbitmqUrl: string;
 
   constructor(
     private readonly logger: Logger,
-    private configService: ConfigService,
+    private configService: ConfigurationService,
     private connectorService: ConnectorService,
     private shipmentService: ShipmentService,
     private paymentService: PaymentService,
-  ) {
-    // read configuration from environment variables
-    this.processingTime = this.configService.get<number>(
-      'PROCESSING_TIME_SECONDS',
-      5000,
-    );
-    this.maxPerMinute[this.queues[0]] = this.configService.get<number>(
-      'PAYMENTS_PER_MINUTE',
-      100,
-    );
-    this.maxPerMinute[this.queues[1]] = this.configService.get<number>(
-      'PAYMENTS_PER_MINUTE',
-      100,
-    );
-    this.successRate = this.configService.get<number>('SUCCESS_RATE', 0.95);
-    this.rabbitmqUrl = this.configService.get<string>(
-      'RABBITMQ_URL',
-      'NOT_SET',
-    );
-    if (this.rabbitmqUrl === 'NOT_SET') {
-      throw new Error('RABBITMQ_URL is not set');
-    }
-
-    // setup queue variables
-    this.queues.forEach((queue) => {
-      this.messageCounts[queue] = 0;
-      this.processingAllowed[queue] = true;
-    });
-  }
+  ) {}
 
   async onModuleInit() {
+    this.initConfig();
     let rabbitMQConnected: boolean = await this.connectToRabbitMQ();
 
     while (!rabbitMQConnected) {
@@ -84,7 +56,37 @@ export class EventProcessorService
       await new Promise((resolve) => setTimeout(resolve, 5000));
       rabbitMQConnected = await this.connectToRabbitMQ();
     }
-    this.queues.forEach((queue) => this.initializeConsumer(queue));
+    // setup queues
+    this.queues.forEach((queue) => {
+      this.messageCounts[queue] = 0;
+      this.processingAllowed[queue] = true;
+      this.initializeConsumer(queue)}
+    );
+  }
+
+  /**
+   * Initializes the configuration for the event processor
+   * is accessed by the ConfigurationService if configuration changes
+   */
+  public initConfig() {
+    // read configuration from exposed variables
+    this.processingTime[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENT_PROCESSING_TIME', 5);
+    this.processingTime[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENT_PROCESSING_TIME', 5);
+    this.maxPerMinute[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENTS_PER_MINUTE', 1000000);
+    this.maxPerMinute[this.queues[1]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENTS_PER_MINUTE', 1000000);
+    this.successRate[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENT_SUCCESS_RATE', 1);
+    this.successRate[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENT_SUCCESS_RATE', 1);
+    this.rabbitmqUrl = this.configService
+      .getCurrentVariableValue<string>('RABBITMQ_URL', 'NOT_SET');
+    if (this.rabbitmqUrl === 'NOT_SET') {
+      throw new Error('RABBITMQ_URL is not set');
+    }
   }
 
   /**
@@ -146,8 +148,8 @@ export class EventProcessorService
     // check if message was already manually updated
     if (this.isBlocked(queue, data)) { return }
     this.messageCounts[queue]++;
-    // randomise timeout to simulate processing
-    const delay = Math.floor(Math.random() * this.processingTime);
+    // simulate processing
+    const delay = this.processingTime[queue];
     this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
     setTimeout(() => {
       const id = data.paymentId || data.shipmentId;
@@ -191,7 +193,7 @@ export class EventProcessorService
    */
   private buildEventUpdate(queueName: string, id: string) {
     // flip successfull event with given sucess rate
-    const successfull: boolean = Math.random() < this.successRate;
+    const successfull: boolean = Math.random() < this.successRate[queueName];
     switch (queueName) {
       case 'payments-queue': {
         const status = successfull
@@ -238,6 +240,14 @@ export class EventProcessorService
       this.reconnectToRabbitMQ();
     }
   }
+
+   /**
+   * Updates all exposed variables every minute.
+   */
+   @Cron('0 * * * * *')
+   updateConfig() {
+      this.initConfig();
+    }
 
   /**
    * Reconnects to RabbitMQ.

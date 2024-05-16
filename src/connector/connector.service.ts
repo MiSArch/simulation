@@ -1,9 +1,9 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AxiosResponse } from 'axios';
 import { UpdateShipmentStatusDto } from '../event-processor/dto/update-shipment-status';
 import { UpdatePaymentStatusDto } from '../event-processor/dto/update-payment-status.dto';
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 /**
  * Service for connecting to the payment and simulation endpoints.
@@ -18,16 +18,12 @@ export class ConnectorService {
   constructor(
     private readonly logger: Logger,
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigurationService,
   ) {
-    this.paymentEndpoint = this.configService.get<string>(
-      'PAYMENT_URL',
-      'NOT_SET',
-    );
-    this.shipmentEndpoint = this.configService.get<string>(
-      'SHIPMENT_URL',
-      'NOT_SET',
-    );
+    this.paymentEndpoint = this.configService
+    .getCurrentVariableValue('PAYMENT_URL', 'NOT_SET');
+    this.shipmentEndpoint = this.configService
+      .getCurrentVariableValue('SHIPMENT_URL', 'NOT_SET');
     if (this.paymentEndpoint === 'NOT_SET') {
       this.logger.error('Payment URL not set');
     }
