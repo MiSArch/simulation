@@ -72,7 +72,7 @@ export class EventProcessorService
     // read configuration from exposed variables
     this.processingTime[this.queues[0]] = this.configService
       .getCurrentVariableValue<number>('PAYMENT_PROCESSING_TIME', 5);
-    this.processingTime[this.queues[0]] = this.configService
+    this.processingTime[this.queues[1]] = this.configService
       .getCurrentVariableValue<number>('SHIPMENT_PROCESSING_TIME', 5);
     this.maxPerMinute[this.queues[0]] = this.configService
       .getCurrentVariableValue<number>('PAYMENTS_PER_MINUTE', 1000000);
@@ -80,7 +80,7 @@ export class EventProcessorService
       .getCurrentVariableValue<number>('SHIPMENTS_PER_MINUTE', 1000000);
     this.successRate[this.queues[0]] = this.configService
       .getCurrentVariableValue<number>('PAYMENT_SUCCESS_RATE', 1);
-    this.successRate[this.queues[0]] = this.configService
+    this.successRate[this.queues[1]] = this.configService
       .getCurrentVariableValue<number>('SHIPMENT_SUCCESS_RATE', 1);
     this.rabbitmqUrl = this.configService
       .getCurrentVariableValue<string>('RABBITMQ_URL', 'NOT_SET');
