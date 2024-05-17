@@ -52,6 +52,9 @@ export class ConfigurationService implements OnModuleInit {
         case 'number':
           value = Number(value);
           break;
+        case 'integer':
+          value = parseInt(value, 10);
+          break;
         case 'boolean':
           value = value === 'true';
           break;
