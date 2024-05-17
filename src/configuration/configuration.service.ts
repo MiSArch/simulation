@@ -32,7 +32,11 @@ export class ConfigurationService implements OnModuleInit {
   }
 
   getDefinedVariables() {
-    return definedVariables;
+    return definedVariables.reduce((acc: Record<string, any>, current) => {
+      const key = Object.keys(current)[0] as keyof typeof current;
+      acc[key] = current[key];
+      return acc as Record<string, any>;
+    }, {});
   }
 
   setVariables(variables: Record<string, any>) {
