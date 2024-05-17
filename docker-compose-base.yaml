@@ -24,3 +24,22 @@ services:
       - simulation-rabbitmq
   simulation-rabbitmq:
     image: "rabbitmq:3-management"
+  simulation-dapr:
+    image: "daprio/daprd:edge"
+    network_mode: "service:simulation"
+    command:
+      [
+        "./daprd",
+        "--app-id",
+        "payment",
+        "--app-port",
+        "${EXPERIMENT_CONFIG_SIDECAR_PORT:-8080}",
+        "--dapr-http-port",
+        "3500",
+        "-placement-host-address",
+        "placement:50006",
+        "--config",
+        "/config.yaml",
+        "--resources-path",
+        "/components",
+      ]

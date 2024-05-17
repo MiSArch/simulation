@@ -38,6 +38,25 @@ export class ConfigurationService implements OnModuleInit {
   setVariables(variables: Record<string, any>) {
     Object.entries(variables).forEach(([key, value]) => {
       this.logger.log(`Setting variable ${key} to "${JSON.stringify(value)}"`);
+      // cast value to defined type
+      const variable = definedVariables.find((v) => Object.keys(v)[0] === key);
+      if (!variable) {
+        throw new Error(`Variable ${key} is not defined`);
+      }
+      const type = Object.values(variable)[0]?.type.type;
+      switch (type) {
+        case 'number':
+          value = Number(value);
+          break;
+        case 'boolean':
+          value = value === 'true';
+          break;
+        case 'string':
+          value = String(value);
+          break;
+        default:
+          throw new Error(`Variable ${key} has an unsupported type ${type}`);
+      }
       this.configurations.set(key, value);
     });
   }

@@ -39,7 +39,7 @@ export class ConnectorService {
    */
   async sendUpdateToShipment(
     data: UpdateShipmentStatusDto,
-  ): Promise<AxiosResponse> {
+  ): Promise<AxiosResponse | undefined> {
     return this.send(`${this.shipmentEndpoint}/shipment/update`, data);
   }
 
@@ -50,7 +50,7 @@ export class ConnectorService {
    */
   async sendUpdateToPayment(
     data: UpdatePaymentStatusDto,
-  ): Promise<AxiosResponse> {
+  ): Promise<AxiosResponse | undefined> {
     return this.send(`${this.paymentEndpoint}/payment/update-payment-status`, data);
   }
 
@@ -61,7 +61,7 @@ export class ConnectorService {
    * @returns An Observable that emits the AxiosResponse object.
    * @throws An error if the request fails.
    */
-  async send(endpoint: string, data: any): Promise<AxiosResponse> {
+  async send(endpoint: string, data: any): Promise<AxiosResponse | undefined> {
     try {
       const response = await this.httpService.post(endpoint, data).toPromise();
       if (!response) {
@@ -77,7 +77,6 @@ export class ConnectorService {
       this.logger.error(
         `Error sending request to ${endpoint}: ${JSON.stringify(error)}`,
       );
-      throw error;
     }
   }
 }
