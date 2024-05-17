@@ -31,7 +31,7 @@ services:
       [
         "./daprd",
         "--app-id",
-        "payment",
+        "simulation",
         "--app-port",
         "${EXPERIMENT_CONFIG_SIDECAR_PORT:-8080}",
         "--dapr-http-port",
