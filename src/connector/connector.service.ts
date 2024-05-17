@@ -40,7 +40,7 @@ export class ConnectorService {
   async sendUpdateToShipment(
     data: UpdateShipmentStatusDto,
   ): Promise<AxiosResponse | undefined> {
-    return this.send(`${this.shipmentEndpoint}/shipment/${data.shipmentId}/status`, data.status);
+    return this.send(`${this.shipmentEndpoint}/shipment/${data.shipmentId}/status`, { status: data.status });
   }
 
   /**
