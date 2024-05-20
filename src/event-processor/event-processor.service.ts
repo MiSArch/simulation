@@ -155,7 +155,7 @@ export class EventProcessorService
       const id = data.paymentId || data.shipmentId;
       if (!id) { throw new Error('No ID found in message') }
       this.buildEventUpdate(queue, id);
-    }, delay);
+    }, delay * 1000);
   }
 
   private parseMessage(msg: amqp.Message): {
