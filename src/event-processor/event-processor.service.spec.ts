@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PaymentListenerService } from './event-processor.service';
+import { EventProcessorService } from './event-processor.service';
 
 describe('PaymentListenerService', () => {
-  let service: PaymentListenerService;
+  let service: EventProcessorService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [PaymentListenerService],
+      providers: [EventProcessorService],
     }).compile();
 
-    service = module.get<PaymentListenerService>(PaymentListenerService);
+    service = module.get<EventProcessorService>(EventProcessorService);
   });
 
   it('should be defined', () => {

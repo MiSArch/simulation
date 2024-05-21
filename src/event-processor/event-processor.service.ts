@@ -4,7 +4,6 @@ import {
   OnModuleInit,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import * as amqp from 'amqplib';
 import { ConnectorService } from '../connector/connector.service';
@@ -14,61 +13,42 @@ import { ShipmentStatus } from 'src/shared/enums/shipment-status.enum';
 import { UpdateShipmentStatusDto } from './dto/update-shipment-status';
 import { ShipmentService } from 'src/shipment/shipment.service';
 import { PaymentService } from 'src/payment/payment.service';
-// import { ConnectionService } from './connection.service'; // Adjust import path as needed
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 /**
  * The service to process events from the respective queues.
- * @property processingTime The upper limit of simulated processing time
+ * @property processingTime The simulated processing time for each queue
  * @property connection The current RabbitMQ connection
  * @property queues An array containing all queue identifiers, to connect to
  * @property maxMessages The rate limit for each queue per minute
  * @property messageCounts The current message count
- * @property booolean flag
+ * @property processingAllowed A flag to indicate if processing is allowed for the queue
+ * @property rabbitmqUrl The RabbitMQ URL
  */
 @Injectable()
 export class EventProcessorService
   implements OnModuleInit, OnApplicationShutdown
 {
-  private readonly processingTime: number;
   private connection: amqp.Connection;
   private channel: amqp.Channel;
   private queues = ['payments-queue', 'shipments-queue'];
+  private readonly processingTime: { [key: string]: number } = {};
   private maxPerMinute: { [key: string]: number } = {};
-  private maxShipmentsPerMinute: number;
-  private successRate: number;
+  private successRate: { [key: string]: number } = {};
   private messageCounts: { [key: string]: number } = {};
   private processingAllowed: { [key: string]: boolean } = {};
+  private rabbitmqUrl: string;
 
   constructor(
     private readonly logger: Logger,
-    private configService: ConfigService,
+    private configService: ConfigurationService,
     private connectorService: ConnectorService,
     private shipmentService: ShipmentService,
     private paymentService: PaymentService,
-  ) {
-    // read configuration from environment variables
-    this.processingTime = this.configService.get<number>(
-      'PROCESSING_TIME_SECONDS',
-      5000,
-    );
-    this.maxPerMinute[this.queues[0]] = this.configService.get<number>(
-      'PAYMENTS_PER_MINUTE',
-      100,
-    );
-    this.maxPerMinute[this.queues[1]] = this.configService.get<number>(
-      'PAYMENTS_PER_MINUTE',
-      100,
-    );
-    this.successRate = this.configService.get<number>('SUCCESS_RATE', 0.95);
-
-    // setup queue variables
-    this.queues.forEach((queue) => {
-      this.messageCounts[queue] = 0;
-      this.processingAllowed[queue] = true;
-    });
-  }
+  ) {}
 
   async onModuleInit() {
+    this.initConfig();
     let rabbitMQConnected: boolean = await this.connectToRabbitMQ();
 
     while (!rabbitMQConnected) {
@@ -76,7 +56,37 @@ export class EventProcessorService
       await new Promise((resolve) => setTimeout(resolve, 5000));
       rabbitMQConnected = await this.connectToRabbitMQ();
     }
-    this.queues.forEach((queue) => this.initializeConsumer(queue));
+    // setup queues
+    this.queues.forEach((queue) => {
+      this.messageCounts[queue] = 0;
+      this.processingAllowed[queue] = true;
+      this.initializeConsumer(queue)}
+    );
+  }
+
+  /**
+   * Initializes the configuration for the event processor
+   * is accessed by the ConfigurationService if configuration changes
+   */
+  public initConfig() {
+    // read configuration from exposed variables
+    this.processingTime[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENT_PROCESSING_TIME', 5);
+    this.processingTime[this.queues[1]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENT_PROCESSING_TIME', 5);
+    this.maxPerMinute[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENTS_PER_MINUTE', 1000000);
+    this.maxPerMinute[this.queues[1]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENTS_PER_MINUTE', 1000000);
+    this.successRate[this.queues[0]] = this.configService
+      .getCurrentVariableValue<number>('PAYMENT_SUCCESS_RATE', 1);
+    this.successRate[this.queues[1]] = this.configService
+      .getCurrentVariableValue<number>('SHIPMENT_SUCCESS_RATE', 1);
+    this.rabbitmqUrl = this.configService
+      .getCurrentVariableValue<string>('RABBITMQ_URL', 'NOT_SET');
+    if (this.rabbitmqUrl === 'NOT_SET') {
+      throw new Error('RABBITMQ_URL is not set');
+    }
   }
 
   /**
@@ -84,10 +94,9 @@ export class EventProcessorService
    * @returns boolean that indicates if the connection was successful
    */
   private async connectToRabbitMQ(): Promise<boolean> {
-    const rabbitmqUrl = this.configService.get<string>('RABBITMQ_URL');
     try {
       // Establish a connection to the RabbitMQ server
-      this.connection = await amqp.connect(rabbitmqUrl);
+      this.connection = await amqp.connect(this.rabbitmqUrl);
       // Create a channel for querying
       this.channel = await this.connection.createChannel();
 
@@ -111,9 +120,13 @@ export class EventProcessorService
    * @param queue the queue identifier
    */
   private initializeConsumer(queue: string) {
-    this.channel.consume(queue, (msg) => this.consumeMessage(queue, msg), {
-      noAck: false,
-    });
+    this.channel.consume(
+      queue,
+      (msg: amqp.ConsumeMessage | null) => this.consumeMessage(queue, msg),
+      {
+        noAck: false,
+      },
+    );
   }
 
   /**
@@ -121,33 +134,34 @@ export class EventProcessorService
    * @param queue the queue identifier
    * @param messageObject the message object to consume
    */
-  private consumeMessage(queue: string, message: any) {
+  private consumeMessage(queue: string, message: amqp.Message | null) {
     if (this.messageCounts[queue] >= this.maxPerMinute[queue]) {
       this.logger.debug(`[${queue}] Maximum message count reached. Pausing processing until reset.`);
       return (this.processingAllowed[queue] = false);
     }
-
+    if (!message) { return }
     const { data } = this.parseMessage(message);
     this.logger.debug(
       `[${queue}] Processing message: ${JSON.stringify(data)} [${this.messageCounts[queue] + 1}/${this.maxPerMinute[queue]}]`,
     );
     this.channel.ack(message);
-
     // check if message was already manually updated
-    if (this.isBlocked(queue, data)) {
-      return;
-    }
-
+    if (this.isBlocked(queue, data)) { return }
     this.messageCounts[queue]++;
-    // randomise timeout to simulate processing
-    const delay = Math.floor(Math.random() * this.processingTime);
+    // simulate processing
+    const delay = this.processingTime[queue];
     this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
     setTimeout(() => {
-      this.buildEventUpdate(queue, data);
-    }, delay);
+      const id = data.paymentId || data.shipmentId;
+      if (!id) { throw new Error('No ID found in message') }
+      this.buildEventUpdate(queue, id);
+    }, delay * 1000);
   }
 
-  private parseMessage(msg: any): { messagePattern: string; data: object } {
+  private parseMessage(msg: amqp.Message): {
+    messagePattern: string;
+    data: { paymentId?: string; shipmentId?: string };
+  } {
     const message = msg.content.toString();
     return JSON.parse(message);
   }
@@ -157,6 +171,7 @@ export class EventProcessorService
    * @param queue the queue identifier
    * @param message the message to check
    * @returns boolean indicating if the message was manually updated
+   * @throws Error if the queue is unknown
    */
   private isBlocked(queue: string, data: any): boolean {
     switch (queue) {
@@ -166,6 +181,8 @@ export class EventProcessorService
       case 'shipments-queue': {
         return this.shipmentService.isBlocked(data.shipmentId);
       }
+      default:
+        throw new Error('Unknown queue');
     }
   }
 
@@ -174,16 +191,16 @@ export class EventProcessorService
    * @param queueName The string identifier of the queue
    * @param msg The received message
    */
-  private buildEventUpdate(queueName: string, data: { paymentId?: string, shipmentId?: string }) {
+  private buildEventUpdate(queueName: string, id: string) {
     // flip successfull event with given sucess rate
-    const successfull: boolean = Math.random() < this.successRate;
+    const successfull: boolean = Math.random() < this.successRate[queueName];
     switch (queueName) {
       case 'payments-queue': {
         const status = successfull
           ? PaymentStatus.SUCCEEDED
           : PaymentStatus.FAILED;
         const paymentDto: UpdatePaymentStatusDto = {
-          paymentId: data.paymentId,
+          paymentId: id,
           status,
         };
         this.connectorService.sendUpdateToPayment(paymentDto);
@@ -194,7 +211,7 @@ export class EventProcessorService
           ? ShipmentStatus.DELIVERED
           : ShipmentStatus.FAILED;
         const shipmentDto: UpdateShipmentStatusDto = {
-          shipmentId: data.shipmentId,
+          shipmentId: id,
           status,
         };
         this.connectorService.sendUpdateToShipment(shipmentDto);
@@ -224,6 +241,14 @@ export class EventProcessorService
     }
   }
 
+   /**
+   * Updates all exposed variables every minute.
+   */
+   @Cron('0 * * * * *')
+   updateConfig() {
+      this.initConfig();
+    }
+
   /**
    * Reconnects to RabbitMQ.
    * Closes the existing channel and connection, then reconnects and initializes consumers for all queues.
@@ -234,11 +259,9 @@ export class EventProcessorService
       this.logger.debug('Reconnecting to RabbitMQ...');
       if (this.channel) {
         await this.channel.close();
-        this.channel = null;
       }
       if (this.connection) {
         await this.connection.close();
-        this.connection = null;
       }
 
       // Reconnect to RabbitMW

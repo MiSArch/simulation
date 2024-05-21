@@ -1,9 +1,9 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { AxiosResponse } from 'axios';
 import { UpdateShipmentStatusDto } from '../event-processor/dto/update-shipment-status';
 import { UpdatePaymentStatusDto } from '../event-processor/dto/update-payment-status.dto';
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 /**
  * Service for connecting to the payment and simulation endpoints.
@@ -18,10 +18,18 @@ export class ConnectorService {
   constructor(
     private readonly logger: Logger,
     private readonly httpService: HttpService,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigurationService,
   ) {
-    this.paymentEndpoint = this.configService.get<string>('PAYMENT_URL');
-    this.shipmentEndpoint = this.configService.get<string>('SHIPMENT_URL');
+    this.paymentEndpoint = this.configService
+    .getCurrentVariableValue('PAYMENT_URL', 'NOT_SET');
+    this.shipmentEndpoint = this.configService
+      .getCurrentVariableValue('SHIPMENT_URL', 'NOT_SET');
+    if (this.paymentEndpoint === 'NOT_SET') {
+      this.logger.error('Payment URL not set');
+    }
+    if (this.shipmentEndpoint === 'NOT_SET') {
+      this.logger.error('Shipment URL not set');
+    }
   }
 
   /**
@@ -31,12 +39,8 @@ export class ConnectorService {
    */
   async sendUpdateToShipment(
     data: UpdateShipmentStatusDto,
-  ): Promise<AxiosResponse> {
-    if (!this.shipmentEndpoint) {
-      this.logger.error('Shipment URL not set');
-      return null;
-    }
-    return this.send(`${this.shipmentEndpoint}/shipment/update`, data);
+  ): Promise<AxiosResponse | undefined> {
+    return this.send(`${this.shipmentEndpoint}/shipment/${data.shipmentId}/status`, { status: data.status });
   }
 
   /**
@@ -46,11 +50,7 @@ export class ConnectorService {
    */
   async sendUpdateToPayment(
     data: UpdatePaymentStatusDto,
-  ): Promise<AxiosResponse> {
-    if (!this.paymentEndpoint) {
-      this.logger.error('Payment URL not set');
-      return null;
-    }
+  ): Promise<AxiosResponse | undefined> {
     return this.send(`${this.paymentEndpoint}/payment/update-payment-status`, data);
   }
 
@@ -61,9 +61,12 @@ export class ConnectorService {
    * @returns An Observable that emits the AxiosResponse object.
    * @throws An error if the request fails.
    */
-  async send(endpoint: string, data: any): Promise<AxiosResponse> {
+  async send(endpoint: string, data: any): Promise<AxiosResponse | undefined> {
     try {
       const response = await this.httpService.post(endpoint, data).toPromise();
+      if (!response) {
+        throw new Error(`Request to ${endpoint} failed`);
+      }
       if (response.status < 200 || response.status > 299) {
         this.logger.error(
           `Request to ${endpoint} failed with status ${response.status}`,
@@ -71,7 +74,9 @@ export class ConnectorService {
       }
       return response;
     } catch (error) {
-      this.logger.error(`Error sending request to ${endpoint}: ${JSON.stringify(error)}`);
+      this.logger.error(
+        `Error sending request to ${endpoint}: ${JSON.stringify(error)}`,
+      );
     }
   }
 }
