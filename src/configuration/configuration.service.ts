@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { definedVariables } from './variable-definitions/variable-definitions';
 import { ConfigService } from '@nestjs/config';
 
@@ -18,8 +18,12 @@ export class ConfigurationService implements OnModuleInit {
     private readonly configService: ConfigService,
   ) {}
 
+
+  /**
+   * Initializes the module.
+   * Sets all defined variables to their default values.
+   */
   onModuleInit() {
-    // set default values to internal variable management
     definedVariables.forEach((variable) => {
       const key = Object.keys(variable)[0] as keyof typeof variable;
       const value = variable[key]?.defaultValue;
@@ -31,6 +35,10 @@ export class ConfigurationService implements OnModuleInit {
     });
   }
 
+  /**
+   * Returns the service variable definitions.
+   * @returns The variable definitions as key value pairs.
+   */
   getDefinedVariables() {
     return definedVariables.reduce((acc: Record<string, any>, current) => {
       const key = Object.keys(current)[0] as keyof typeof current;
@@ -39,15 +47,19 @@ export class ConfigurationService implements OnModuleInit {
     }, {});
   }
 
+  /**
+   * Sets the service variables.
+   * @param variables - The updated variables.
+   */
   setVariables(variables: Record<string, any>) {
     Object.entries(variables).forEach(([key, value]) => {
       this.logger.log(`Setting variable ${key} to "${JSON.stringify(value)}"`);
-      // cast value to defined type
       const variable = definedVariables.find((v) => Object.keys(v)[0] === key);
       if (!variable) {
         throw new Error(`Variable ${key} is not defined`);
       }
       const type = Object.values(variable)[0]?.type.type;
+      // cast the value to the correct type
       switch (type) {
         case 'number':
           value = Number(value);
@@ -68,6 +80,12 @@ export class ConfigurationService implements OnModuleInit {
     });
   }
 
+  /**
+   * Returns the current value of a variable.
+   * @param name - The name of the variable.
+   * @param fallback - The value to return if the variable is not defined.
+   * @returns The value of the variable with the requested type.
+   */
   getCurrentVariableValue<T>(name: string, fallback: T): T {
     const value = this.configurations.get(name);
     if (value !== undefined) {
