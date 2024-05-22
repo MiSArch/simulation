@@ -10,14 +10,12 @@ import { ConfigService } from '@nestjs/config';
  */
 @Injectable()
 export class ConfigurationService implements OnModuleInit {
-  // 
   private configurations = new Map<string, any>();
 
   constructor(
     private readonly logger: Logger,
     private readonly configService: ConfigService,
   ) {}
-
 
   /**
    * Initializes the module.
@@ -30,8 +28,7 @@ export class ConfigurationService implements OnModuleInit {
       if (!value) {
         throw new Error(`Variable ${key} does not have a default value`);
       }
-      this.logger.log(`Setting variable ${key} to default "${JSON.stringify(value)}"`);
-      this.configurations.set(key, value);
+      this.setVariables({ [key]: value });
     });
   }
 
@@ -53,7 +50,6 @@ export class ConfigurationService implements OnModuleInit {
    */
   setVariables(variables: Record<string, any>) {
     Object.entries(variables).forEach(([key, value]) => {
-      this.logger.log(`Setting variable ${key} to "${JSON.stringify(value)}"`);
       const variable = definedVariables.find((v) => Object.keys(v)[0] === key);
       if (!variable) {
         throw new Error(`Variable ${key} is not defined`);
@@ -76,6 +72,7 @@ export class ConfigurationService implements OnModuleInit {
         default:
           throw new Error(`Variable ${key} has an unsupported type ${type}`);
       }
+      this.logger.log(`Setting variable ${key} to ${value}`);
       this.configurations.set(key, value);
     });
   }

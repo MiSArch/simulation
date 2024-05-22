@@ -10,6 +10,7 @@ import { ConnectorModule } from 'src/connector/connector.module';
  */
 @Module({
   imports: [
+    ConnectorModule,
     ClientsModule.registerAsync([
       {
         name: 'PAYMENT_SERVICE',
@@ -27,7 +28,6 @@ import { ConnectorModule } from 'src/connector/connector.module';
         inject: [ConfigService],
       },
     ]),
-    ConnectorModule,
   ],
   controllers: [PaymentController],
   providers: [PaymentService, Logger],

@@ -32,9 +32,6 @@ export class EventProcessorService
   private connection: amqp.Connection;
   private channel: amqp.Channel;
   private queues = ['payments-queue', 'shipments-queue'];
-  private readonly processingTime: { [key: string]: number } = {};
-  private maxPerMinute: { [key: string]: number } = {};
-  private successRate: { [key: string]: number } = {};
   private messageCounts: { [key: string]: number } = {};
   private processingAllowed: { [key: string]: boolean } = {};
   private rabbitmqUrl: string;
@@ -47,8 +44,18 @@ export class EventProcessorService
     private paymentService: PaymentService,
   ) {}
 
+  /**
+   * Initializes the module.
+   * Connects to RabbitMQ and initializes consumers for all queues.
+   */
   async onModuleInit() {
-    this.initConfig();
+    this.rabbitmqUrl = this.configService.getCurrentVariableValue<string>(
+      'RABBITMQ_URL',
+      'NOT_SET',
+    );
+    if (this.rabbitmqUrl === 'NOT_SET') {
+      throw new Error('RABBITMQ_URL is not set');
+    }
     let rabbitMQConnected: boolean = await this.connectToRabbitMQ();
 
     while (!rabbitMQConnected) {
@@ -60,33 +67,47 @@ export class EventProcessorService
     this.queues.forEach((queue) => {
       this.messageCounts[queue] = 0;
       this.processingAllowed[queue] = true;
-      this.initializeConsumer(queue)}
+      this.initializeConsumer(queue);
+    });
+  }
+
+  /**
+   * Helper function, that retrieves the current simulated processing time for a given queue.
+   * @param queueName - The name of the queue.
+   * @returns The processing time in seconds.
+   */
+  private getProcessingTime(queueName: string) {
+    const key = queueName == 'payments-queue' ? 'PAYMENT' : 'SHIPMENT';
+    return this.configService.getCurrentVariableValue<number>(
+      `${key}_PROCESSING_TIME`,
+      5,
     );
   }
 
   /**
-   * Initializes the configuration for the event processor
-   * is accessed by the ConfigurationService if configuration changes
+   * Helper function, that retrieves the current upper processing limit for a given queue.
+   * @param queueName - The name of the queue.
+   * @returns The rate limit per minute.
    */
-  public initConfig() {
-    // read configuration from exposed variables
-    this.processingTime[this.queues[0]] = this.configService
-      .getCurrentVariableValue<number>('PAYMENT_PROCESSING_TIME', 5);
-    this.processingTime[this.queues[1]] = this.configService
-      .getCurrentVariableValue<number>('SHIPMENT_PROCESSING_TIME', 5);
-    this.maxPerMinute[this.queues[0]] = this.configService
-      .getCurrentVariableValue<number>('PAYMENTS_PER_MINUTE', 1000000);
-    this.maxPerMinute[this.queues[1]] = this.configService
-      .getCurrentVariableValue<number>('SHIPMENTS_PER_MINUTE', 1000000);
-    this.successRate[this.queues[0]] = this.configService
-      .getCurrentVariableValue<number>('PAYMENT_SUCCESS_RATE', 1);
-    this.successRate[this.queues[1]] = this.configService
-      .getCurrentVariableValue<number>('SHIPMENT_SUCCESS_RATE', 1);
-    this.rabbitmqUrl = this.configService
-      .getCurrentVariableValue<string>('RABBITMQ_URL', 'NOT_SET');
-    if (this.rabbitmqUrl === 'NOT_SET') {
-      throw new Error('RABBITMQ_URL is not set');
-    }
+  private getMaxPerMinute(queueName: string) {
+    const key = queueName == 'payments-queue' ? 'PAYMENTS' : 'SHIPMENTS';
+    return this.configService.getCurrentVariableValue<number>(
+      `${key}_PER_MINUTE`,
+      1000000,
+    );
+  }
+
+  /**
+   * Helper function, that retrieves the current success rate for a given queue.
+   * @param queueName - The name of the queue.
+   * @returns The success rate im percent as a double.
+   */
+  private getSuccessRate(queueName: string) {
+    const key = queueName == 'payments-queue' ? 'PAYMENT' : 'SHIPMENT';
+    return this.configService.getCurrentVariableValue<number>(
+      `${key}_SUCCESS_RATE`,
+      0.95,
+    );
   }
 
   /**
@@ -131,25 +152,27 @@ export class EventProcessorService
 
   /**
    * Consumes a message from the queue
+   * Dynamically loads configuration for each queue
    * @param queue the queue identifier
    * @param messageObject the message object to consume
    */
   private consumeMessage(queue: string, message: amqp.Message | null) {
-    if (this.messageCounts[queue] >= this.maxPerMinute[queue]) {
+    const maxMessages = this.getMaxPerMinute(queue);
+    const delay = this.getProcessingTime(queue);
+    if (this.messageCounts[queue] >= maxMessages) {
       this.logger.debug(`[${queue}] Maximum message count reached. Pausing processing until reset.`);
       return (this.processingAllowed[queue] = false);
     }
     if (!message) { return }
     const { data } = this.parseMessage(message);
-    this.logger.debug(
-      `[${queue}] Processing message: ${JSON.stringify(data)} [${this.messageCounts[queue] + 1}/${this.maxPerMinute[queue]}]`,
-    );
+    this.logger.debug(`[${queue}] Processing message: ${JSON.stringify(data)} [${this.messageCounts[queue] + 1}/${maxMessages}]`);
     this.channel.ack(message);
+
     // check if message was already manually updated
     if (this.isBlocked(queue, data)) { return }
+
     this.messageCounts[queue]++;
     // simulate processing
-    const delay = this.processingTime[queue];
     this.logger.log(`[${queue}] Sending Event Update after [${delay}]s`);
     setTimeout(() => {
       const id = data.paymentId || data.shipmentId;
@@ -192,8 +215,9 @@ export class EventProcessorService
    * @param msg The received message
    */
   private buildEventUpdate(queueName: string, id: string) {
-    // flip successfull event with given sucess rate
-    const successfull: boolean = Math.random() < this.successRate[queueName];
+    // flip successfull event with dynamic success rate
+    const successRate = this.getSuccessRate(queueName);
+    const successfull: boolean = Math.random() < successRate;
     switch (queueName) {
       case 'payments-queue': {
         const status = successfull
@@ -222,6 +246,7 @@ export class EventProcessorService
 
   /**
    * Resets all rate limits every minute
+   * Reconnects only if processing was stopped for any queue and the current rate is greater than 0
    */
   @Cron('0 * * * * *')
   resetMessageCounts() {
@@ -229,7 +254,8 @@ export class EventProcessorService
     let reconnect: boolean = false;
     this.queues.forEach((queue) => {
       // check if processing was stopped for any queue
-      if (!this.processingAllowed[queue] && this.maxPerMinute[queue] > 0) {
+      const maxMessages = this.getMaxPerMinute(queue);
+      if (!this.processingAllowed[queue] && maxMessages > 0) {
         reconnect = true;
       }
       this.messageCounts[queue] = 0;
@@ -240,14 +266,6 @@ export class EventProcessorService
       this.reconnectToRabbitMQ();
     }
   }
-
-   /**
-   * Updates all exposed variables every minute.
-   */
-   @Cron('0 * * * * *')
-   updateConfig() {
-      this.initConfig();
-    }
 
   /**
    * Reconnects to RabbitMQ.

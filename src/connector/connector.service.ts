@@ -20,10 +20,14 @@ export class ConnectorService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigurationService,
   ) {
-    this.paymentEndpoint = this.configService
-    .getCurrentVariableValue('PAYMENT_URL', 'NOT_SET');
-    this.shipmentEndpoint = this.configService
-      .getCurrentVariableValue('SHIPMENT_URL', 'NOT_SET');
+    this.paymentEndpoint = this.configService.getCurrentVariableValue(
+      'PAYMENT_URL',
+      'NOT_SET',
+    );
+    this.shipmentEndpoint = this.configService.getCurrentVariableValue(
+      'SHIPMENT_URL',
+      'NOT_SET',
+    );
     if (this.paymentEndpoint === 'NOT_SET') {
       this.logger.error('Payment URL not set');
     }
@@ -40,7 +44,10 @@ export class ConnectorService {
   async sendUpdateToShipment(
     data: UpdateShipmentStatusDto,
   ): Promise<AxiosResponse | undefined> {
-    return this.send(`${this.shipmentEndpoint}/shipment/${data.shipmentId}/status`, { status: data.status });
+    return this.send(
+      `${this.shipmentEndpoint}/shipment/${data.shipmentId}/status`,
+      { status: data.status },
+    );
   }
 
   /**
@@ -51,7 +58,10 @@ export class ConnectorService {
   async sendUpdateToPayment(
     data: UpdatePaymentStatusDto,
   ): Promise<AxiosResponse | undefined> {
-    return this.send(`${this.paymentEndpoint}/payment/update-payment-status`, data);
+    return this.send(
+      `${this.paymentEndpoint}/payment/update-payment-status`,
+      data,
+    );
   }
 
   /**
