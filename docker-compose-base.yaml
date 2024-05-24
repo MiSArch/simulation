@@ -17,13 +17,16 @@ services:
       context: ./
       target: production
     environment:
-      RABBITMQ_URL: amqp://simulation-rabbitmq:5672
+      RABBITMQ_URL: amqp://guest:guest@simulation-rabbitmq:5672
       PAYMENT_URL: http://payment:8080
       SHIPMENT_URL: http://shipment:8080
     depends_on:
       - simulation-rabbitmq
   simulation-rabbitmq:
     image: "rabbitmq:3-management"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
   simulation-dapr:
     image: "daprio/daprd:edge"
     network_mode: "service:simulation"
