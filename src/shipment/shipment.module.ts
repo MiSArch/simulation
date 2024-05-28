@@ -10,6 +10,7 @@ import { ConnectorModule } from 'src/connector/connector.module';
  */
 @Module({
   imports: [
+    ConnectorModule,
     // register the shipment service as a client for rabbitmq
     ClientsModule.registerAsync([
       {
@@ -28,7 +29,6 @@ import { ConnectorModule } from 'src/connector/connector.module';
         inject: [ConfigService],
       },
     ]),
-    ConnectorModule,
   ],
   controllers: [ShipmentController],
   providers: [ShipmentService, Logger],

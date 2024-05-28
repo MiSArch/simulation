@@ -7,10 +7,7 @@ import { ConfigurationModule } from 'src/configuration/configuration.module';
  * The module for the connector service.
  */
 @Module({
-  imports: [
-    HttpModule, 
-    ConfigurationModule
-  ],
+  imports: [HttpModule, ConfigurationModule],
   providers: [ConnectorService, Logger],
   exports: [ConnectorService],
 })

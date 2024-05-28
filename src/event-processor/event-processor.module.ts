@@ -13,7 +13,7 @@ import { ConfigurationModule } from 'src/configuration/configuration.module';
     ConnectorModule,
     ShipmentModule,
     PaymentModule,
-    ConfigurationModule
+    ConfigurationModule,
   ],
   providers: [EventProcessorService, Logger],
 })
