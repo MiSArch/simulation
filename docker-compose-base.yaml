@@ -20,6 +20,12 @@ services:
       RABBITMQ_URL: amqp://guest:guest@simulation-rabbitmq:5672
       PAYMENT_URL: http://payment:8080
       SHIPMENT_URL: http://shipment:8080
+      OTEL_TRACES_EXPORTER: none
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_NODE_RESOURCE_DETECTORS: env,host,os
+      OTEL_SERVICE_NAME: simulation
+      OTEL_SEMCONV_STABILITY_OPT_IN: http
+      NODE_OPTIONS: --require @opentelemetry/auto-instrumentations-node/register
     depends_on:
       - simulation-rabbitmq
   simulation-rabbitmq:
